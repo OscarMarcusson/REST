@@ -6,11 +6,17 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Diagnostics;
 using System.IO;
+using REST.Utils;
 
 namespace REST
 {
 	public class Client
 	{
+		public const ushort Connecting = 100;
+		public const ushort CouldNotConnect = 100;
+
+
+
 		public readonly IPEndPoint EndPoint;
 		Task? task;
 		CancellationTokenSource cancellationTokenSource;
@@ -20,9 +26,7 @@ namespace REST
 		public decimal ReceiveTimeout { get; set; } = 1m;
 		public decimal DelayBetweenConnectionTimeouts { get; set; } = 5m;
 
-		Action<object>? logInfo;
-		Action<ErrorCode, object>? logError;
-		readonly object LogLocker = new object();
+		readonly Logger Logger = new Logger();
 
 
 		public Client(ushort port)
@@ -34,13 +38,15 @@ namespace REST
 
 
 
-		public Client SetLoggers(Action<object> info, Action<ErrorCode, object> error)
+		public Client SetInfoLogger(Action<ushort, object> logger)
 		{
-			lock (LogLocker)
-			{
-				logInfo = info;
-				logError = error;
-			}
+			Logger.SetInfoLogger(logger);
+			return this;
+		}
+
+		public Client SetErrorLogger(Action<ushort, object> logger)
+		{
+			Logger.SetErrorLogger(logger);
 			return this;
 		}
 
@@ -53,6 +59,7 @@ namespace REST
 			{
 				Stop();
 				WaitForExit();
+				cancellationTokenSource = new CancellationTokenSource();
 				task = Init();
 				try { task.Wait(); }
 				catch (Exception) { }
@@ -80,19 +87,21 @@ namespace REST
 						client.DontFragment = true;
 
 						// stopwatch.Restart();
-						LogInfoSafe($"Connecting to {EndPoint}...");
+						Logger.Info(Connecting, $"Connecting to {EndPoint}...");
 						await client.ConnectAsync(EndPoint);
 						Console.WriteLine("CONNECTED!");
 						// TODO:: Connect callback
 
-
-						using (var stream = new NetworkStream(client))
-						using (var reader = new StreamReader(stream))
-						using (var writer = new StreamWriter(stream))
+						// using (var stream = new NetworkStream(client))
+						// using (var reader = new StreamReader(stream))
+						// using (var writer = new StreamWriter(stream))
+						using(var messageWriter = new StringWriter())
 						{
+							// var test = client.
 							// TODO:: A while !cancellationTokenSource.IsCancellationRequested loop that sends / receives messages from
 							// a thread safe pool so the client can be used from the UI blocking thread
 
+							/*
 							await writer.WriteLineAsync("GET /api/test-1 HTTP/1.1");
 							// Request headers
 							await writer.WriteLineAsync($"Host: {EndPoint}");
@@ -104,9 +113,10 @@ namespace REST
 							await writer.WriteLineAsync($"Connection: keep-alive");
 							await writer.WriteLineAsync($"Upgrade-Insecure-Requests: 1");
 
-
+							// TODO:: Handle
 							var test = await reader.ReadToEndAsync();
-							LogInfoSafe(test);
+							Logger.Info(0, test);
+							*/
 							await Task.Delay(1000, cancellationTokenSource.Token);
 						}
 
@@ -120,7 +130,7 @@ namespace REST
 					// Timed out
 					if (socketException.NativeErrorCode == 10061)
 					{
-						await ErrorWait(ErrorCode.CouldNotConnect, DelayBetweenConnectionTimeouts);
+						await ErrorWait(CouldNotConnect, DelayBetweenConnectionTimeouts);
 					}
 					else
 					{
@@ -193,9 +203,9 @@ namespace REST
 
 		static int SecondsToMS(decimal d) => (int)Math.Round(d * 1000);
 
-		async Task ErrorWait(ErrorCode errorCode, decimal seconds)
+		async Task ErrorWait(ushort errorCode, decimal seconds)
 		{
-			LogErrorSafe(errorCode, $"Waiting for {seconds:G29} {(seconds == 1m ? "second" : "seconds")}...");
+			Logger.Error(errorCode, $"Waiting for {seconds:G29} {(seconds == 1m ? "second" : "seconds")}...");
 			var timeToWait = SecondsToMS(seconds);
 			if (timeToWait <= 1)
 				await Task.Yield();
@@ -204,35 +214,15 @@ namespace REST
 		}
 
 
-		void LogInfoSafe(object message)
+
+
+
+
+
+
+		public async Task<Response> Get(string url)
 		{
-			lock (LogLocker)
-			{
-				if (logInfo == null)
-				{
-					Console.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [INFO ]: {message}");
-				}
-				else
-				{
-					logInfo(message);
-				}
-			}
-		}
-		void LogErrorSafe(ErrorCode errorCode, object message)
-		{
-			lock (LogLocker)
-			{
-				if (logError == null)
-				{
-					Console.ForegroundColor = ConsoleColor.Red;
-					Console.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [ERROR]: {(int)errorCode} {errorCode} - {message}");
-					Console.ResetColor();
-				}
-				else
-				{
-					logError(errorCode, message);
-				}
-			}
+			return null;
 		}
 	}
 }
