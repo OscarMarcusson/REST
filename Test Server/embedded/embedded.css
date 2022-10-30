@@ -1,0 +1,53 @@
+/* This is just a test file to showcase embedded resource loading */
+html {
+    background: rgb(33,38,43);
+    background: radial-gradient(circle, rgba(33,38,43,1) 0%, rgba(8,8,14,1) 100%);
+
+    position: absolute;
+    overflow: hidden;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.window {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 10%;
+    bottom: 10%;
+
+    padding: 1em;
+    margin: auto;
+    max-width: 650px;
+    max-height: 300px;
+    overflow: auto;
+    border-radius: 3px;
+
+    background: rgb(33,38,43);
+    background: linear-gradient(0deg, rgba(33,38,43,1) 0%, rgba(47,54,61,1) 100%);
+
+    border: 1px solid #1b1f24;
+    border-top-color: #424a53;
+    border-bottom-color: #0f1114;
+}
+
+h1 {
+    margin: 0;
+    padding: 0;
+    padding-bottom: 0.1em;
+    color: #deddd7;
+    font-size: 30px; /* Some random comment to showcase the minifier */
+    border-bottom: 1px solid rgba(222, 221, 215, 0.1);
+}
+
+/*
+    Multi-line comment
+    here, again just
+    to showcase the
+    minifier
+*/
+p {
+    color: #bfbeba;
+}

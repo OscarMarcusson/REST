@@ -9,6 +9,8 @@ using System.Collections.Generic;
 using System.Linq;
 using REST.Utils;
 using System.Security.Cryptography.X509Certificates;
+using System.Reflection;
+using System.IO;
 
 namespace REST
 {
@@ -16,6 +18,7 @@ namespace REST
 	{
 		public readonly ushort Port;
 		public bool LocalOnly { get; private set; }
+		public Encoding Encoding { get; set; } = Encoding.GetEncoding("iso-8859-1");
 
 		TcpListener listener;
 		CancellationTokenSource cancellation = new CancellationTokenSource();
@@ -73,9 +76,100 @@ namespace REST
 			throw new NotImplementedException();
 		}
 
-		public Server MapEmbeddedDirectory(string path, bool minimizeFileContent = true)
+		public Server MapEmbeddedDirectory(string? source, string? output = null, bool minify = true, Func<Assembly, bool> includeAssembly = null)
 		{
-			throw new NotImplementedException();
+			// Format the source to the embedded path format
+			source = source?.Replace('/', '.')?.Replace('\\', '.')?.Trim(' ', '\t', '"', '.');
+			if (string.IsNullOrWhiteSpace(source))
+				source = null;
+
+			// Format the root url
+			output = output?.Trim(' ', '\t', '/');
+			if (string.IsNullOrWhiteSpace(output))
+				output = null;
+
+			// Load the assemblies and start getting resources from them
+			var libraryAssembly = Assembly.GetExecutingAssembly();
+			var assemblies = AppDomain.CurrentDomain.GetAssemblies().Where(x =>
+			{
+				if (x == libraryAssembly)
+					return false;
+
+				if (x.FullName.StartsWith("System.") || x.FullName.StartsWith("netstandard,"))
+					return false;
+
+				if (includeAssembly != null)
+					return includeAssembly(x);
+
+				return true;
+			}).ToArray();
+
+			foreach(var assembly in assemblies)
+			{
+				var allResources = assembly.GetManifestResourceNames();
+				if(allResources.Length > 0)
+				{
+					var index = allResources[0].IndexOf('.');
+					var root = allResources[0].Substring(0, index);
+					var directory = source != null
+										? $"{root}.{source}."
+										: $"{root}."
+										;
+
+					var resourcesToLoad = allResources
+						.Where(x => x.StartsWith(directory))
+						.ToArray()
+						;
+
+					foreach(var resourceToLoad in resourcesToLoad)
+					{
+						using (var stream = assembly.GetManifestResourceStream(resourceToLoad))
+						using (var reader = new StreamReader(stream))
+						{
+							var content = reader.ReadToEnd();
+
+							var extension = Path.GetExtension(resourceToLoad);
+							if (minify)
+							{
+								switch (extension)
+								{
+									case ".html":
+										content = Minifier.HTML(content);
+										break;
+
+									case ".js":
+										content = Minifier.JavaScript(content);
+										break;
+
+									case ".css":
+										content = Minifier.CSS(content);
+										break;
+								}
+							}
+
+							var fileUrl = resourceToLoad.Substring(directory.Length).Trim('.');
+							fileUrl = fileUrl.Substring(0, fileUrl.Length - extension.Length).Replace('.', '/');
+							fileUrl += extension;
+
+							var url = output != null
+										? $"{output}/{fileUrl}"
+										: fileUrl
+										;
+
+							var response = new Response
+							{
+								Code = HttpStatusCode.OK,
+								Type = MimeTypeParser.Resolve(extension),
+								Body = content
+							};
+
+							Get(url, async _ => response);
+						}
+					}
+				}
+			}
+
+			return this;
 		}
 
 
@@ -140,7 +234,7 @@ namespace REST
 				var handler = RequestHandlers.FirstOrDefault(x => x.GetLock());
 				if(handler == null)
 				{
-					handler = new RequestHandler(EndPoints, cancellation.Token, Logger);
+					handler = new RequestHandler(EndPoints, cancellation.Token, Logger, Encoding);
 					RequestHandlers.Add(handler);
 					Logger.Info(91, $"Created new handler, total: {RequestHandlers.Count}");
 				}

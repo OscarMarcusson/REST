@@ -25,6 +25,7 @@ namespace REST
 		public decimal SendTimeout { get; set; } = 1m;
 		public decimal ReceiveTimeout { get; set; } = 1m;
 		public decimal DelayBetweenConnectionTimeouts { get; set; } = 5m;
+		public Encoding Encoding { get; set; } = Encoding.GetEncoding(1252);
 
 		readonly Logger Logger = new Logger();
 

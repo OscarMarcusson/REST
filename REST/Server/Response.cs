@@ -11,69 +11,60 @@ namespace REST
 {
 	public class Response
 	{
+		readonly StringBuilder Builder = new StringBuilder();
+
 		public HttpStatusCode Code { get; set; } = HttpStatusCode.OK;
+		public MimeType Type { get; set; } = MimeType.Text;
+		public readonly Dictionary<string, string> Headers = new Dictionary<string, string>();
 
 		public object? Body { get; set; }
 
-		string? cache;
+		string? bodyCache;
 
-		
-		public string ToHttpResponse()
+
+		public string ToHttpResponse(Encoding encoding)
 		{
-			if (cache != null)
-				return cache;
+			Builder.Clear();
 
-			using (var writer = new StringWriter())
+			Builder.AppendLine($"HTTP/1.1 {(int)Code} {Code}");
+			Builder.AppendLine($"Date: {DateTime.Now}");
+			Builder.AppendLine($"Server: Potato 123");
+			Builder.AppendLine($"Connection: Closed");
+
+			if(bodyCache != null)
 			{
-				writer.WriteLine($"HTTP/1.1 {(int)Code} {Code}");
-				writer.WriteLine($"Date: {DateTime.Now}");
-				writer.WriteLine($"Server: Potato 123");
-				writer.WriteLine($"Connection: Closed");
-
-				if (Body != null)
+				Builder.AppendLine($"Content-Type: {MimeTypeParser.Parser[Type]}; charset={encoding.WebName}");
+				Builder.Append(bodyCache);
+			}
+			else if (Body != null)
+			{
+				var type = Body.GetType();
+				if (type == typeof(string))
 				{
-					var contentType = ContentTypeText;
-					var type = Body.GetType();
-					string body;
-					if (type == typeof(string))
-					{
-						body = Body.ToString();
-					}
-					else
-					{
-						if (type.IsValueType) body = Body.ToString();
-						else if (type.IsEnum) body = ((int)Body).ToString();
-						else
-						{
-							contentType = ContentTypeJson;
-							body = Body?.ToJson() ?? "";
-						}
-					}
-
-					writer.WriteLine(contentType);
-					writer.WriteLine($"Content-Length: {body.Length}");
-					writer.WriteLine();
-					writer.WriteLine(body);
+					bodyCache = Body.ToString();
 				}
 				else
 				{
-					writer.WriteLine(ContentTypeText);
-					writer.WriteLine($"Content-Length: 0");
+					if (type.IsValueType) bodyCache = Body.ToString();
+					else if (type.IsEnum) bodyCache = ((int)Body).ToString();
+					else
+					{
+						Type = MimeType.JSon;
+						bodyCache = Body?.ToJson() ?? "";
+					}
 				}
 
-				cache = writer.ToString();
-				return cache;
+				Builder.AppendLine($"Content-Type: {MimeTypeParser.Parser[Type]}; charset={encoding.WebName}");
+
+				bodyCache = $"Content-Length: {bodyCache.Length}\n\n{bodyCache}";
+				Builder.AppendLine(bodyCache);
 			}
+
+			return Builder.ToString();
 		}
 
 
-		public async Task Send(StreamWriter writer) => await writer.WriteLineAsync(ToHttpResponse());
-
-
-
-		const string ContentTypeText = "Content-type: text/plain; charset=UTF-8";
-		const string ContentTypeJson = "Content-type: application/json; charset=UTF-8";
-
+		public async Task Send(StreamWriter writer, Encoding encoding) => await writer.WriteLineAsync(ToHttpResponse(encoding));
 
 
 		internal static readonly Response BadRequest = new Response { Code = System.Net.HttpStatusCode.BadRequest };

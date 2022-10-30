@@ -1,9 +1,25 @@
-﻿<!DOCTYPE html>
-<html>
+<!-- This is just a test file to showcase embedded resource loading -->
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>Embedded Hello World</title>
+	<!-- We also include comments to showcase the minifier which will remove them all -->
+	<title>Embedded Hello World</title>
+	<meta name="author" content="Oscar Marcusson">
+	<meta name="description" content="A simple web page example.">
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<link rel="stylesheet" href="embedded.css">
 </head>
 <body>
-    <p>This page was built as an embedded resource</p>
+	<div class="window">
+		<h1>Hello World!</h1>
+		<!-- We place the text on multiple lines here to showcase the minifier removing the lines without changing the layout on the screen -->
+		<p>
+			This page was built as an embedded resource.
+			It contains a little bit of everything to showcase the minifiers functionality.
+		</p>
+		<p>
+			Check the original code and compare it to the servers output!
+		</p>
+	</div>
 </body>
 </html>

@@ -52,6 +52,10 @@ var server = new Server(11311)
 	.Get("api/hello-world", async request => new Response { Body = "Hello World!" })
 	.Get("api/body", async request => new Response { Body = request.Body })
 	.Get("api/shared", GetSharedData)
+	.MapEmbeddedDirectory(
+		source: "embedded", 
+		output: "resources",
+		minify: true)
 
 	// Start and wait until the server exits
 	.Start()

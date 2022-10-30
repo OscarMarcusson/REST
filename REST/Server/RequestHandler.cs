@@ -28,6 +28,7 @@ namespace REST
 		readonly EndPointsManager EndPoints;
 		readonly CancellationToken Cancellation;
 		readonly Logger Logger;
+		readonly Encoding Encoding;
 		internal Task? Task;
 
 		readonly object AccessLocker = new object();
@@ -52,12 +53,12 @@ namespace REST
 		Func<Request, Task<Response>>? handler;
 		Dictionary<string, string> headers = new Dictionary<string, string>();
 
-
-		public RequestHandler(EndPointsManager endPoints, CancellationToken cancellationToken, Logger logger)
+		public RequestHandler(EndPointsManager endPoints, CancellationToken cancellationToken, Logger logger, Encoding encoding)
 		{
 			EndPoints = endPoints;
 			Cancellation = cancellationToken;
 			Logger = logger;
+			Encoding = encoding;
 		}
 
 		public bool GetLock()
@@ -81,7 +82,7 @@ namespace REST
 			{
 				using (client)
 				using (var networkStream = client.GetStream())
-				using (var networkReader = new StreamReader(networkStream, Encoding.UTF8))
+				using (var networkReader = new StreamReader(networkStream, Encoding))
 				{
 					// networkWriter.AutoFlush = true;
 					long contentLength;
@@ -146,10 +147,10 @@ namespace REST
 						// Send the response
 						if (response != null)
 						{
-							var responseHttp = response.ToHttpResponse();
+							var responseHttp = response.ToHttpResponse(Encoding);
 							// var chars = responseHttp.ToCharArray();
 							// await networkWriter.WriteAsync(chars, Cancellation);
-							var bytes = Encoding.UTF8.GetBytes(responseHttp);
+							var bytes = Encoding.GetBytes(responseHttp);
 							await client.Client.SendAsync(bytes, SocketFlags.None, Cancellation);
 
 							if (killConnection)
