@@ -28,7 +28,7 @@ async Task SharedDataUpdater()
 		stopwatch.Start();
 		builder.AppendLine($"time={DateTime.UtcNow.Ticks}");
 		builder.AppendLine($"value={sinValue}");
-		builder.AppendLine($"check={(Random.Shared.NextSingle() > 0.5f ? "1" : "0")}");
+		builder.Append($"check={(Random.Shared.NextSingle() > 0.5f ? "1" : "0")}");
 		sharedResponse = new Response
 		{
 			Body = builder.ToString()
@@ -50,6 +50,7 @@ var server = new Server(11311)
 
 	// Add endpoints
 	.Get("api/hello-world", async request => new Response { Body = "Hello World!" })
+	.Get("api/body", async request => new Response { Body = request.Body })
 	.Get("api/shared", GetSharedData)
 
 	// Start and wait until the server exits

@@ -17,7 +17,7 @@ namespace REST
 		public readonly ushort Port;
 		public bool LocalOnly { get; private set; }
 
-		Socket listener;
+		TcpListener listener;
 		CancellationTokenSource cancellation = new CancellationTokenSource();
 		readonly AutoResetEvent WaitListener = new AutoResetEvent(true);
 
@@ -88,19 +88,11 @@ namespace REST
 			{
 				WaitListener.Reset();
 				cancellation = new CancellationTokenSource();
-				var endpoint = new IPEndPoint(LocalOnly ? IPAddress.Loopback : IPAddress.Any, Port);
 
-				listener = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
-				{
-					NoDelay = true,
-					ExclusiveAddressUse = true, // TODO:: Config for this <<<
-					DontFragment = true,
-					SendTimeout = 5000, // TODO:: Config
-				};
-				listener.Bind(endpoint);
-				listener.Listen(100);
+				listener = new TcpListener(LocalOnly ? IPAddress.Loopback : IPAddress.Any, Port);
+				listener.Start(100); // TODO:: Config for this value
 
-				new Thread(() => MainLoopAsync().GetAwaiter().GetResult()).Start();
+				new Thread(() => MainLoopAsync().Wait()) { IsBackground = true }.Start();
 			}
 			catch(Exception e)
 			{
@@ -115,7 +107,7 @@ namespace REST
 		public void Stop()
 		{
 			cancellation?.Cancel();
-			listener?.Dispose();
+			listener?.Stop();
 			Task.WhenAll(RequestHandlers.Where(x => x.Task != null).Select(x => x.Task))
 				.ConfigureAwait(false)
 				.GetAwaiter()
@@ -139,11 +131,11 @@ namespace REST
 		{
 			Logger.Info(90, "ON START EVENT HERE");
 
-			Socket client;
+			TcpClient client;
 			while (!cancellation.IsCancellationRequested)
 			{
 
-				client = await listener.AcceptAsync();
+				client = await listener.AcceptTcpClientAsync();
 
 				var handler = RequestHandlers.FirstOrDefault(x => x.GetLock());
 				if(handler == null)

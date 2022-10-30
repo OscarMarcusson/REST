@@ -25,12 +25,10 @@ namespace REST
 
 	internal class RequestHandler
 	{
-		readonly byte[] Buffer = new byte[1024];
 		readonly EndPointsManager EndPoints;
 		readonly CancellationToken Cancellation;
 		readonly Logger Logger;
 		internal Task? Task;
-		readonly ArraySegment<byte> buffer = new ArraySegment<byte>(new byte[8192]);
 
 		readonly object AccessLocker = new object();
 		bool isBusy;
@@ -47,14 +45,12 @@ namespace REST
 
 		// Pre-defined variables to avoid a bit of GC
 		Request request;
-		Response response;
+		Response? response;
 		EndPointsMethodGroup? endPointsGroup;
 		NameValueCollection? filters;
-		ReadMode readMode;
 		string url;
 		Func<Request, Task<Response>>? handler;
 		Dictionary<string, string> headers = new Dictionary<string, string>();
-		readonly List<byte> bodyBytes = new List<byte>();
 
 
 		public RequestHandler(EndPointsManager endPoints, CancellationToken cancellationToken, Logger logger)
@@ -77,219 +73,115 @@ namespace REST
 			}
 		}
 
-		public void Handle(Socket client) => Task = Task.Run(async () => await HandleAsync(client));
+		public void Handle(TcpClient client) => Task = Task.Run(async () => await HandleAsync(client));
 
-		async Task HandleAsync(Socket client)
+		async Task HandleAsync(TcpClient client)
 		{
-			var memoryStream = new MemoryStream();
-			var reader = new StreamReader(memoryStream, Encoding.UTF8);
-
 			try
 			{
 				using (client)
-				// using (var stream = new NetworkStream(client))
+				using (var networkStream = client.GetStream())
+				using (var networkReader = new StreamReader(networkStream, Encoding.UTF8))
 				{
-					readMode = ReadMode.Root;
-
-					var line = "";
-					int rawCharValue;
-					var lineBuilder = new StringBuilder();
-					long bodyLength = 0;
-					long contentLength = 0;
-					var hasLine = false;
-					var hasRemainingData = false;
-					var hasResponse = false;
+					// networkWriter.AutoFlush = true;
+					long contentLength;
 					var killConnection = false;
-					bodyBytes.Clear();
 
-					while (!killConnection && client.Connected)
+					// Message loop
+					while (!networkReader.EndOfStream && !Cancellation.IsCancellationRequested && !killConnection)
 					{
-						if (!hasRemainingData)
+						// Reset shared variables between messages
+						response = null;
+						handler = null;
+						contentLength = -1;
+						headers.Clear();
+
+						// Method (GET/POST etc) and URL
+						var line = await networkReader.ReadLineAsync();
+						killConnection = !ParseRoot(line, client);
+
+						// Headers
+						while (!networkReader.EndOfStream && !Cancellation.IsCancellationRequested && !killConnection)
 						{
-							hasRemainingData = true;
-							var result = await client.ReceiveAsync(buffer, SocketFlags.None, Cancellation);
-							memoryStream.Write(buffer.Array, buffer.Offset, result);
-							memoryStream.Position -= result;
+							line = await networkReader.ReadLineAsync();
+							if (string.IsNullOrWhiteSpace(line))
+								break;
+
+							killConnection = !ParseHeader(line);
 						}
 
-						// Body
-						if (readMode == ReadMode.Body)
+						// Figure out if we're done or if we have a body to parse
+						if (headers.TryGetValue("Content-Length", out var contentLengthString))
 						{
-							// Read every single byte until we reach the target body length
-							while (bodyLength < contentLength)
+							if (long.TryParse(contentLengthString, out contentLength))
 							{
-
-								rawCharValue = reader.Read();
-								if (rawCharValue < 0)
-								{
-									hasRemainingData = false;
-									break;
-								}
-
-								lineBuilder.Append((char)rawCharValue);
-								bodyLength++;
-							}
-
-							// Have to check since it might break before reaching end of body
-							if (bodyLength >= contentLength)
-							{
-								var body = lineBuilder.ToString();
-								lineBuilder.Clear();
-								request = new Request(client.RemoteEndPoint, filters, headers, body);
-								hasResponse = true;
-
-								if(reader.Peek() < 0)
-								{
-									hasRemainingData = false;
-									reader.Dispose();
-									memoryStream.Dispose();
-									memoryStream = new MemoryStream();
-									reader = new StreamReader(memoryStream, Encoding.UTF8);
-								}
-								// TODO:: ELSE we should probably to the same thing, but write the current remainder to the new stream?
-							}
-						}
-
-						// Root / headers
-						else
-						{
-							while (true)
-							{
-								rawCharValue = reader.Read();
-								if (rawCharValue < 0)
-								{
-									hasRemainingData = false;
-									break;
-								}
-
-								// TODO:: some flag for if we're in a pure data read (like byte body)
-								// if so we should not do this, just append append append until length is done
-								if (rawCharValue == '\n' || rawCharValue == '\r')
-								{
-									hasLine = true;
-									// Due to Windows shenanigans we just have to ensure to strip "\r\n" as a single "\n"
-									if (rawCharValue == '\r')
-									{
-										rawCharValue = reader.Peek();
-										if (rawCharValue == '\n')
-											rawCharValue = reader.Read();
-									}
-									break;
-								}
-								else
-								{
-									lineBuilder.Append((char)rawCharValue);
-								}
-							}
-
-							if (hasLine)
-							{
-								hasLine = false;
-								line = lineBuilder.ToString();
-								lineBuilder.Clear();
-
-								switch (readMode)
-								{
-									case ReadMode.Root:
-										if (ParseRoot(line, client))
-										{
-											readMode = ReadMode.Headers;
-										}
-										else
-										{
-											hasResponse = true;
-											killConnection = true;
-										}
-										break;
-
-									case ReadMode.Headers:
-										if (line.Length > 0)
-										{
-											if (!ParseHeader(line))
-											{
-												hasResponse = true;
-												killConnection = true;
-											}
-										}
-										else
-										{
-											if(headers.TryGetValue("Content-Length", out var contentLengthString))
-											{
-												if(!long.TryParse(contentLengthString, out contentLength))
-												{
-													// TODO:: Flag for forced kill connection, used for errors to avoid stream garbage
-													Logger.Error(12637, $"{client.RemoteEndPoint} [{url}] Could not parse content length header value '{contentLengthString}'");
-													contentLength = 0;
-												}
-												readMode = ReadMode.Body;
-											}
-											else
-											{
-												hasResponse = true;
-												request = new Request(client.RemoteEndPoint, filters, headers, null);
-											}
-										}
-										break;
-								}
-							}
-						}
-
-
-						// Is the request done?
-						if (hasResponse)
-						{
-							hasResponse = false;
-
-							// Reset shared variables for the next round
-							readMode = ReadMode.Root;
-							bodyLength = 0;
-							contentLength = 0;
-							headers = new Dictionary<string, string>();
-							filters = null;
-							bodyBytes.Clear();
-
-							if (handler == null || killConnection)
-							{
-								var message = response.Body?.ToString() ?? $"{client.RemoteEndPoint}: {(int)response.Code} {response.Code}";
-								if(message != null)
-									Logger.Error(987, message);
-								killConnection = true;
+								var bodyBytes = new char[contentLength];
+								var i = await networkReader.ReadBlockAsync(bodyBytes, Cancellation);
+								var body = new string(bodyBytes);
+								request = new Request(client.Client.RemoteEndPoint, filters, headers, body);
 							}
 							else
 							{
-								response = await handler.Invoke(request);
+								Logger.Error(12637, $"{client.Client.RemoteEndPoint} [{url}] Could not parse content length header value '{contentLengthString}'");
+								contentLength = 0;
+								killConnection = true;
 							}
+						}
+						// No body, create a request without one
+						else
+						{
+							request = new Request(client.Client.RemoteEndPoint, filters, headers, null);
+						}
 
+
+						// If we have a handler we're all good, send the request to the handler
+						if (handler != null)
+						{
+							if (killConnection)
+								request.Headers["Connection"] = "close";
+
+							response = await handler.Invoke(request);
+						}
+
+						// Send the response
+						if (response != null)
+						{
 							var responseHttp = response.ToHttpResponse();
+							// var chars = responseHttp.ToCharArray();
+							// await networkWriter.WriteAsync(chars, Cancellation);
 							var bytes = Encoding.UTF8.GetBytes(responseHttp);
-							var data = await client.SendAsync(bytes, SocketFlags.None, Cancellation);
-							// await response.Send(writer);
-							handler = null;
+							await client.Client.SendAsync(bytes, SocketFlags.None, Cancellation);
 
 							if (killConnection)
-								return;
+								Logger.Info(43523, "Killing connection to " + client.Client.RemoteEndPoint);
+						}
+						// If we got this far without a request something is seriously wrong, terminate the connection for safety
+						else
+						{
+							Logger.Error(36273, "INTERNAL ERROR - Reached end of message loop without a response. This should not happen, terminating connection...");
+							killConnection = true;
 						}
 					}
+
+					client.Close();
 				}
+
 			}
-			catch (Exception e)
+			catch(Exception e)
 			{
-				Logger.Error(500, e.ToString());
+				Logger.Error(500, e);
 			}
 			finally
 			{
-				reader.Dispose();
-				memoryStream.Dispose();
-
-				lock (AccessLocker)
-					isBusy = false;
+					lock (AccessLocker)
+						isBusy = false;
 			}
 		}
 
 
 
 		// The first parse of a message, to find the method (GET/POST/etc) and URL
-		bool ParseRoot(string line, Socket client)
+		bool ParseRoot(string line, TcpClient client)
 		{
 			var index = line.IndexOf(' ');
 			var requestMethod = line.Substring(0, index);
@@ -327,12 +219,12 @@ namespace REST
 			if (!endPointsGroup.TryGet(url, out handler))
 			{
 				response = Response.NotFound;
-				Logger.Error(9487, $"{client.RemoteEndPoint}: Could not find url: {url}");
+				Logger.Error(9487, $"{client.Client.RemoteEndPoint}: Could not find url: {url}");
 				return false;
 			}
 			
 			// Just for the sake of logging
-			Logger.Info(21487, $"{client.RemoteEndPoint} requested {url}");
+			Logger.Info(21487, $"{client.Client.RemoteEndPoint} requested {url}");
 			return true;
 		}
 
@@ -355,33 +247,6 @@ namespace REST
 				};
 				return false;
 			}
-		}
-
-
-
-		readonly Response InvalidMethodResponse = new Response
-		{
-			Code = HttpStatusCode.BadRequest,
-			Body = "Invalid REST method type"
-		};
-
-
-		static byte[] ReceiveAll(Socket socket)
-		{
-			var buffer = new List<byte>();
-
-			while (socket.Available > 0)
-			{
-				var currByte = new Byte[1];
-				var byteCounter = socket.Receive(currByte, currByte.Length, SocketFlags.None);
-
-				if (byteCounter.Equals(1))
-				{
-					buffer.Add(currByte[0]);
-				}
-			}
-
-			return buffer.ToArray();
 		}
 	}
 }
