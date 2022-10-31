@@ -10,9 +10,9 @@
 	<link rel="stylesheet" href="embedded.css">
 </head>
 <body>
-	<div class="window">
+	<!-- A basic centered window to display some elements with styling -->
+	<div class="window" id="window">
 		<h1>Hello World!</h1>
-		<!-- We place the text on multiple lines here to showcase the minifier removing the lines without changing the layout on the screen -->
 		<p>
 			This page was built as an embedded resource.
 			It contains a little bit of everything to showcase the minifiers functionality.
@@ -20,6 +20,19 @@
 		<p>
 			Check the original code and compare it to the servers output!
 		</p>
+		<div class="fill"></div>
+		<button onclick="OpenMeaningOfLife();">Script test</button>
 	</div>
+
+	<!-- A simple JS example -->
+	<div class="window popup" id="popup">
+		<h1>42</h1>
+		<p>It's obviously the answer to life, the universe, and everything</p>
+		<div class="fill"></div>
+		<button onclick="CloseMeaningOfLife();">Of course it is!</button>
+	</div>
+
+	<!-- The scripts -->
+	<script src="embedded.js"></script>
 </body>
 </html>

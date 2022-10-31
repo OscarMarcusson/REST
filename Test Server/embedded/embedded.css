@@ -13,28 +13,50 @@ html {
 
 .window {
     position: absolute;
-    left: 10%;
-    right: 10%;
-    top: 10%;
+    left:   10%;
+    right:  10%;
+    top:    10%;
     bottom: 10%;
 
-    padding: 1em;
-    margin: auto;
-    max-width: 650px;
-    max-height: 300px;
-    overflow: auto;
-    border-radius: 3px;
+    display:        flex;
+    flex-direction: column;
+    align-items:    stretch;
+
+    padding:       1em;
+    margin:        auto;
+    max-width:     650px;
+    max-height:    300px;
+    overflow:      clip;
 
     background: rgb(33,38,43);
     background: linear-gradient(0deg, rgba(33,38,43,1) 0%, rgba(47,54,61,1) 100%);
 
-    border: 1px solid #1b1f24;
-    border-top-color: #424a53;
+    border-radius: 3px;
+    border:        1px solid #1b1f24;
+    border-top-color:    #424a53;
     border-bottom-color: #0f1114;
+
+    box-shadow: 
+        0 2px 9px rgba(0,0,0, 0.4),
+        0 7px 30px rgba(0,0,0,0.4),
+        0 -2px 0 rgba(0,0,0,0.2) inset;
+
+    transition: 0.3s;
+}
+
+.popup {
+    opacity: 0;
+    left:   16%;
+    right:  16%;
+    top:    16%;
+    bottom: 16%;
+
+    max-width:  450px;
+    max-height: 200px;
 }
 
 h1 {
-    margin: 0;
+    margin:  0;
     padding: 0;
     padding-bottom: 0.1em;
     color: #deddd7;
@@ -42,12 +64,27 @@ h1 {
     border-bottom: 1px solid rgba(222, 221, 215, 0.1);
 }
 
-/*
-    Multi-line comment
-    here, again just
-    to showcase the
-    minifier
-*/
 p {
     color: #bfbeba;
+}
+
+button {
+    padding: 0.5em;
+    border-radius: 3px;
+    background: rgb(33,38,43);
+    background: linear-gradient(0deg, #2f363d 0%, #444d57 100%);
+
+    border:  none;
+    outline: none;
+
+    box-shadow: 
+        0 8px 14px rgba(0,0,0,0.05),
+        0 2px 4px rgba(0,0,0,0.2);
+}
+    button:hover{  filter: brightness(1.4) contrast(1.1); }
+    button:active{ filter: brightness(0.9) contrast(0.9); }
+
+
+.fill {
+    flex-grow: 1;
 }
