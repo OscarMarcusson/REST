@@ -19,56 +19,6 @@ namespace REST.Utils
 
 
 
-
-		static string StripComments(string file, string start, string end, Func<string,bool> includeComment = null)
-		{
-			var builder = new StringBuilder();
-			var takeFrom = 0;
-			var startIndex = file.IndexOf(start);
-			while(startIndex > -1)
-			{
-				if(takeFrom < startIndex)
-				{
-					var content = file.Substring(takeFrom, startIndex - takeFrom);
-					builder.Append(content);
-					takeFrom = startIndex;
-				}
-
-				var endIndex = file.IndexOf(end, startIndex + start.Length);
-				if(endIndex > 0)
-				{
-					if(includeComment != null)
-					{
-						var comment = file.Substring(startIndex + start.Length, endIndex - startIndex - start.Length);
-						if (includeComment(comment))
-						{
-							builder.Append(start);
-							builder.Append(comment);
-							builder.Append(end);
-						}
-					}
-					takeFrom = endIndex + end.Length;
-					startIndex = file.IndexOf(start, takeFrom);
-				}
-				// Comment without end, ignore and leave
-				else
-				{
-					takeFrom = file.Length;
-					break;
-				}
-			}
-
-			// Any remaining content after the last comment is added to the builder
-			if(takeFrom < file.Length)
-			{
-				var content = file.Substring(takeFrom);
-				builder.Append(content);
-			}
-
-			return builder.ToString();
-		}
-
-
 		public static string HTML(string file)
 		{
 			var builder = new StringBuilder();
@@ -181,15 +131,69 @@ namespace REST.Utils
 			return file;
 		}
 
-		
-
 
 		public static string JavaScript(string file)
 		{
-			file = StripComments(file, "/*", "*/");
+			file = file.Trim(' ', '\t', '\r', '\n');
 			var rows = GetRows(file, x => !x.StartsWith("//"));
+
+			file = string.Join(" ", rows);
+			var builder = new StringBuilder();
+			var cache = new StringBuilder();
+			for (int i = 0; i < file.Length; i++)
+			{
+				if (char.IsWhiteSpace(file[i]))
+				{
+					cache.Append(' ');
+					Skip(file, ref i, ' ', '\t', '\r', '\n');
+					i--;
+					continue;
+				}
+
+				if(i + 1 < file.Length && file[i] == '/' && file[i+1] == '*')
+				{
+					var end = file.IndexOf("*/", i+2);
+					if (end > 0)
+					{
+						i = end + 1;
+						continue;
+					}
+					break;
+				}
+
+				// String? Do NOT modify the content of that
+				if (file[i] == '\'' || file[i] == '"')
+				{
+					var tmp = cache.ToString();
+					tmp = tmp.ClearJavaScriptCode();
+					builder.Append(tmp);
+					cache.Clear();
+
+					var first = file[i];
+					builder.Append(file[i]);
+					while(++i < file.Length)
+					{
+						builder.Append(file[i]);
+						if (file[i] == first && file[i-1] != '\\')
+							break;
+					}
+					continue;
+				}
+
+				cache.Append(file[i]);
+			}
+
+			if(cache.Length > 0)
+			{
+				var tmp = cache.ToString();
+				tmp = tmp.ClearJavaScriptCode();
+				builder.Append(tmp);
+			}
+
+			file = builder.ToString();
 			return file;
 		}
+
 
 
 		public static string CSS(string file)
@@ -284,6 +288,30 @@ namespace REST.Utils
 
 
 
+		static string ClearJavaScriptCode(this string str)
+			=> str
+				.TrimSpacesAround(
+					'(', ')',
+					'{', '}',
+					'[', ']',
+					'[', ']',
+					'=', '*', '+', '/', '-',
+					';', ':'
+				);
+
+		static string TrimSpacesAround(this string str, char c)
+		{
+			str = str.Replace($" {c}", c.ToString());
+			str = str.Replace($"{c} ", c.ToString());
+			return str;
+		}
+
+		static string TrimSpacesAround(this string str, params char[] chars)
+		{
+			foreach (var c in chars)
+				str = str.TrimSpacesAround(c);
+			return str;
+		}
 
 		static void SkipWhiteSpace(string str, ref int i)
 		{
