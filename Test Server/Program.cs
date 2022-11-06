@@ -8,9 +8,8 @@ using REST;
 object locker = new object();
 var cancellationTokenSource = new CancellationTokenSource();
 Response? sharedResponse = null;
-var notFound = new Response
+var notFound = new Response(System.Net.HttpStatusCode.NotFound)
 {
-	Code = System.Net.HttpStatusCode.NotFound,
 	Body = "The resource could not be found, please try again"
 };
 
@@ -52,6 +51,7 @@ var server = new Server(11311)
 	.Get("api/hello-world", async request => new Response { Body = "Hello World!" })
 	.Get("api/body", async request => new Response { Body = request.Body })
 	.Get("api/shared", GetSharedData)
+	.Get("api/1", async x => new Response { Body = "1" })
 	.MapEmbeddedDirectory(
 		source: "embedded", 
 		output: "resources",

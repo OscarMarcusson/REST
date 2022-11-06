@@ -232,22 +232,15 @@ namespace REST
 
 		bool ParseHeader(string line)
 		{
-			var index = line.IndexOf(':');
-			if (index > -1)
-			{
-				headers?.Add(line.Substring(0, index).Trim(), line.Substring(index + 1).Trim());
+			if (RequestParser.TryParseHeader(line, headers))
 				return true;
-			}
-			else
+
+			Logger.Error(0847, $"Incorrect header: {line}");
+			response = new Response(HttpStatusCode.BadRequest)
 			{
-				Logger.Error(0847, $"Incorrect header: {line}");
-				response = new Response
-				{
-					Code = HttpStatusCode.BadRequest,
-					Body = $"Could not parse as a header: {line}"
-				};
-				return false;
-			}
+				Body = $"Could not parse as a header: {line}"
+			};
+			return false;
 		}
 	}
 }

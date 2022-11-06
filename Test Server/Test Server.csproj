@@ -9,10 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="embedded\embedded.css" />
     <None Remove="embedded\embedded.html" />
+    <None Remove="embedded\embedded.js" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="embedded\embedded.js" />
+    <EmbeddedResource Include="embedded\embedded.css" />
     <EmbeddedResource Include="embedded\embedded.html" />
   </ItemGroup>
 

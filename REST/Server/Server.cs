@@ -158,7 +158,6 @@ namespace REST
 
 							var response = new Response
 							{
-								Code = HttpStatusCode.OK,
 								Type = MimeTypeParser.Resolve(extension),
 								Body = content
 							};
