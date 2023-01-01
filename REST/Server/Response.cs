@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Mime;
 using System.Text;
 using System.Threading.Tasks;
 using TinyJson;
@@ -42,13 +43,30 @@ namespace REST
 			Builder.Clear();
 
 			Builder.AppendLine($"HTTP/1.1 {(int)StatusCode} {StatusCode}");
-			Builder.AppendLine($"Date: {DateTime.Now}");
-			Builder.AppendLine($"Server: Potato 123");
-			Builder.AppendLine($"Connection: Closed");
+			Builder.AppendLine(GetFormattedHeader("Date", DateTime.Now.ToString()));
+			Builder.AppendLine(GetFormattedHeader("Server", "Potato 123"));
+			Builder.AppendLine(GetFormattedHeader("Connection", "Closed"));
 
-			if(bodyCache != null)
+			foreach(var header in Headers)
 			{
-				Builder.AppendLine($"Content-Type: {MimeTypeParser.Parser[Type]}; charset={encoding.WebName}");
+				switch (header.Key)
+				{
+					// Ignored headers, already handled or will be after this
+					case "Date":
+					case "Server":
+					case "Connection":
+					case "Content-Type":
+					case "Content-Length":
+						break;
+
+					// Custm headers
+					default: Builder.AppendLine($"{header.Key}: {header.Value}"); break;
+				}
+			}
+
+			if (bodyCache != null)
+			{
+				Builder.AppendLine($"Content-Type: {Headers["Content-Type"]}");
 				Builder.Append(bodyCache);
 			}
 			else if (Body != null)
@@ -69,7 +87,9 @@ namespace REST
 					}
 				}
 
-				Builder.AppendLine($"Content-Type: {MimeTypeParser.Parser[Type]}; charset={encoding.WebName}");
+				var contentType = $"{MimeTypeParser.Parser[Type]}; charset={encoding.WebName}";
+				Headers["Content-Type"] = contentType;
+				Builder.AppendLine($"Content-Type: {contentType}");
 
 				bodyCache = $"Content-Length: {bodyCache.Length}\n\n{bodyCache}";
 				Builder.Append(bodyCache);
@@ -83,6 +103,7 @@ namespace REST
 			return Builder.ToString();
 		}
 
+		string GetFormattedHeader(string key, string defaultValue) => $"{key}: {(Headers.TryGetValue(key, out var value) ? value : defaultValue)}";
 
 		public async Task Send(StreamWriter writer, Encoding encoding) => await writer.WriteLineAsync(ToHttpResponse(encoding));
 
