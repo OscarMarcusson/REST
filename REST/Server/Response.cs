@@ -74,6 +74,11 @@ namespace REST
 				bodyCache = $"Content-Length: {bodyCache.Length}\n\n{bodyCache}";
 				Builder.Append(bodyCache);
 			}
+			else
+			{
+				Builder.AppendLine("Content-Length: 0");
+				Builder.AppendLine();
+			}
 
 			return Builder.ToString();
 		}
